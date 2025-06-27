@@ -1,0 +1,23 @@
+# Configuration file for GIS Copilot Desktop
+
+ai:
+  model: "gemini-pro"
+  api_key: ""  # Set this via environment variable GEMINI_API_KEY
+  
+map:
+  default_center: [24.7135, 46.6753]  # Riyadh, Saudi Arabia
+  default_zoom: 10
+  
+ui:
+  theme: "dark"  # dark, light, auto
+  
+data:
+  temp_directory: "temp"
+  supported_formats:
+    - ".shp"
+    - ".geojson" 
+    - ".json"
+    - ".csv"
+    - ".kml"
+    - ".gpx"
+    - ".gdb"

@@ -1,0 +1,12 @@
+PyQt5
+geopandas
+shapely
+fiona
+pyproj
+google-generativeai
+pyyaml
+python-dotenv
+matplotlib
+folium
+PyQtWebEngine
+QDarkStyle
