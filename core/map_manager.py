@@ -19,10 +19,17 @@ class MapManager(QObject):
             zoom_start=zoom,
             tiles='OpenStreetMap'
         )
-        
-        # Add additional tile layers
-        folium.TileLayer('Stamen Terrain', name='Terrain').add_to(m)
-        folium.TileLayer('CartoDB positron', name='CartoDB Positron').add_to(m)
+          # Add additional tile layers
+        folium.TileLayer(
+            tiles='Stamen Terrain',
+            name='Terrain',
+            attr='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.'
+        ).add_to(m)
+        folium.TileLayer(
+            tiles='CartoDB positron',
+            name='CartoDB Positron',
+            attr='© CartoDB © OpenStreetMap contributors'
+        ).add_to(m)
         
         # Add layers
         if layers:

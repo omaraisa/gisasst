@@ -20,33 +20,69 @@ A desktop GIS application with AI-powered spatial analysis capabilities. This is
 - Folium
 - Gemini API key
 
+## Quick Start
+
+### 🚀 For New Users
+
+1. **Download the project** (clone or download ZIP)
+2. **Run the setup wizard**: Double-click `SETUP.bat` (Windows) or follow [INSTALLATION.md](INSTALLATION.md)
+3. **Configure your API key**: Edit `.env` file with your [Gemini API key](https://makersuite.google.com/app/apikey)
+4. **Start the application**: Double-click `start.bat` or run `python main.py`
+
+> **Having installation issues?** Check our comprehensive [Installation Guide](INSTALLATION.md) which handles common SSL errors and dependency issues.
+
 ## Installation
 
+### Automated Setup (Recommended)
+
+**Windows Users:**
+```cmd
+SETUP.bat
+```
+
+**All Platforms:**
+See our detailed [Installation Guide](INSTALLATION.md) for step-by-step instructions and troubleshooting.
+
+### Manual Installation
+
 1. **Clone or extract the project**
-   ```powershell
+   ```bash
    cd gis_copilot_desktop
    ```
 
 2. **Create virtual environment**
-   ```powershell
+   ```bash
    python -m venv venv
+   
+   # Windows
    venv\Scripts\activate
+   
+   # macOS/Linux  
+   source venv/bin/activate
    ```
 
 3. **Install dependencies**
-   ```powershell
+   ```bash
    pip install -r requirements.txt
+   
+   # If you get SSL errors, use:
+   pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
    ```
 
 4. **Configure environment**
-   ```powershell
+   ```bash
    # Copy the template and edit with your API key
-   copy .env.template .env
-   # Edit .env with your Gemini API key
+   copy .env.template .env    # Windows
+   cp .env.template .env      # macOS/Linux
    ```
 
-5. **Run the application**
-   ```powershell
+5. **Test installation**
+   ```bash
+   python test_system.py
+   ```
+
+6. **Run the application**
+   ```bash
    python main.py
    ```
 
@@ -149,6 +185,30 @@ gis_copilot_desktop/
 
 ## Troubleshooting
 
+### Installation Issues
+
+**SSL Certificate Errors:**
+```bash
+# Use trusted hosts to bypass SSL issues
+pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
+```
+
+**PyQtWebEngine Fails to Install:**
+```bash
+# Use our specialized installer
+.\install_webengine.bat
+
+# Or skip it (app works with limited map features)
+pip install -r requirements_minimal.txt
+```
+
+**Virtual Environment Issues:**
+- Ensure Python 3.8+ is installed and in PATH
+- Try running as Administrator (Windows)
+- Use full Python path if needed
+
+### Application Issues
+
 **AI Not Working**
 - Check your Gemini API key in `.env`
 - Ensure internet connection for AI features
@@ -167,6 +227,12 @@ gis_copilot_desktop/
 - Large datasets may be slow to load
 - Consider simplifying geometries for better performance
 - Close unused layers
+
+### Getting Help
+
+1. **Run diagnostics**: `python test_system.py`
+2. **Check our [Installation Guide](INSTALLATION.md)** for detailed troubleshooting
+3. **Create an issue** with your system info and error messages
 
 ## Development
 

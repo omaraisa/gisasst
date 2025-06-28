@@ -1,0 +1,15 @@
+# Core requirements (without PyQtWebEngine for troubleshooting)
+PyQt5
+geopandas
+shapely
+fiona
+pyproj
+google-generativeai
+pyyaml
+python-dotenv
+matplotlib
+folium
+QDarkStyle
+
+# Optional: PyQtWebEngine (install manually if needed)
+# PyQtWebEngine
