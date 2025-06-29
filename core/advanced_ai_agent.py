@@ -122,6 +122,26 @@ class AdvancedGISAgent(QObject):
     
     def _generate_execution_plan(self, user_request, context):
         """Generate step-by-step execution plan"""
+        
+        # Handle simple conversational requests without formal planning
+        user_lower = user_request.lower().strip()
+        
+        # Simple greetings and social interactions
+        if user_lower in ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']:
+            return self._create_simple_response(f"Hi there! I'm your GIS assistant. I can help you analyze spatial data, manage layers, and perform various GIS operations. You currently have {len(context.get('available_layers', []))} layer(s) loaded. What would you like to do?")
+        
+        # Simple queries that don't need complex planning
+        if user_lower in ['help', 'what can you do', 'what can you do?']:
+            return self._create_simple_response("I can help you with various GIS tasks like:\n• Analyzing spatial data\n• Creating buffers around features\n• Finding intersections between layers\n• Measuring distances and areas\n• Managing map layers\n• Exporting results\n\nJust ask me in plain English what you'd like to do!")
+        
+        if 'how many layers' in user_lower or 'list layers' in user_lower:
+            layers = [layer['name'] for layer in context.get('available_layers', [])]
+            if layers:
+                return self._create_simple_response(f"You have {len(layers)} layer(s) loaded: {', '.join(layers)}")
+            else:
+                return self._create_simple_response("No layers are currently loaded. Would you like me to help you load some data?")
+        
+        # For complex requests, use full AI planning
         self.status_update.emit("🧠 Analyzing request and creating execution plan...")
         
         # Get available app functions
@@ -132,59 +152,62 @@ class AdvancedGISAgent(QObject):
                 app_functions_info = json.dumps(funcs_result['functions'], indent=2)
         
         # Create comprehensive prompt
-        prompt = f"""You are an advanced autonomous GIS agent. Analyze the user's request and create a detailed execution plan.
+        prompt = f"""You are a friendly, helpful GIS assistant. Analyze the user's request and respond naturally while being precise about technical operations.
 
 USER REQUEST: {user_request}
 
-CURRENTLY LOADED LAYERS (DO NOT READ FROM FILES):
+CURRENTLY LOADED LAYERS:
 {json.dumps(context['available_layers'], indent=2)}
 
-CRITICAL RULES - NEVER VIOLATE THESE:
-1. NEVER use gpd.read_file() or read any files - layers are already loaded!
-2. ALWAYS use get_layer(layer_name) to access existing layers
-3. Available layer names are: {[layer['name'] for layer in context.get('available_layers', [])]}
-4. Use buffer_layer(layer_name, distance, unit) for buffering operations
-5. Use add_to_map(gdf, layer_name) to add results to the map
-6. Use update_map() to refresh the display
+IMPORTANT GUIDELINES:
+1. Be conversational and friendly - speak like a helpful colleague, not a robot
+2. NEVER use gpd.read_file() - all layers are already loaded and available
+3. Always use get_layer(layer_name) to access existing layers
+4. Available layer names: {[layer['name'] for layer in context.get('available_layers', [])]}
+5. Use app functions like buffer_layer(), add_to_map() for operations
+6. Set 'result' variable with natural, helpful responses
 
-EXECUTION ENVIRONMENT FUNCTIONS:
-- get_layer(name): Returns GeoDataFrame of existing layer
-- get_layer_names(): Returns list of loaded layer names  
-- buffer_layer(layer_name, distance, unit): Creates buffer using app functions
-- add_to_map(gdf, name): Adds result to map and updates display
-- update_map(): Refreshes map display
-- app_functions: Direct access to all app operations
+AVAILABLE FUNCTIONS:
+- get_layer(name): Get existing layer data
+- get_layer_names(): List all loaded layers
+- buffer_layer(layer_name, distance, unit): Create buffer zones
+- add_to_map(gdf, name): Display results on map
+- app_functions: Access to all GIS operations
 
-EXAMPLE CORRECT CODE FOR BUFFER:
+RESPONSE STYLE EXAMPLES:
+- Simple queries: "You have 3 layers loaded: roads, buildings, and parks"
+- Operations: "Great! I've created a 500-meter buffer around your roads layer"
+- Errors: "I couldn't find that layer. You currently have: roads, buildings, parks"
+
+EXAMPLE CODE:
 ```python
-# Get the existing layer (don't read from file!)
-layer_data = get_layer('landuse')
-print(f"Got layer with {{len(layer_data)}} features")
+# Natural response for layer count
+layer_names = get_layer_names()
+if layer_names:
+    result = f"You have {{len(layer_names)}} layer{{'' if len(layer_names) == 1 else 's'}} loaded: {{', '.join(layer_names)}}"
+else:
+    result = "No layers are currently loaded. Would you like me to help you load some data?"
 
-# Use the app function to create buffer
-result = buffer_layer('landuse', 1000, 'meters')
-print(f"Buffer result: {{result}}")
-
-# The buffer_layer function automatically adds to map
+# Friendly buffer operation
+buffer_result = buffer_layer('roads', 500, 'meters')
+if buffer_result['success']:
+    add_to_map(buffer_result['layer'], buffer_result['result_layer'])
+    result = f"Perfect! I've created a 500-meter buffer around your roads layer. The new '{buffer_result['result_layer']}' layer has {buffer_result['feature_count']} features and is now visible on your map."
+else:
+    result = f"I ran into an issue creating the buffer: {buffer_result['message']}"
 ```
 
-WRONG - NEVER DO THIS:
-```python
-# WRONG! Don't read files
-landuse = gpd.read_file('landuse.shp')  # DON'T DO THIS!
-```
-
-Create a JSON execution plan with ONLY execute_python_code actions:
+Create a JSON plan that produces natural, conversational responses:
 {{
     "analysis": "What the user wants to accomplish",
-    "approach": "Use existing loaded layers and app functions",
+    "approach": "Use existing loaded layers and provide clear feedback",
     "steps": [
         {{
             "step": 1,
             "action": "execute_python_code",
             "description": "What this code does",
             "parameters": {{
-                "code": "Python code using get_layer() and app functions"
+                "code": "Python code that sets 'result' variable with user feedback"
             }},
             "expected_outcome": "What should happen"
         }}
@@ -194,7 +217,7 @@ Create a JSON execution plan with ONLY execute_python_code actions:
 
 AVAILABLE LAYERS: {[layer['name'] for layer in context.get('available_layers', [])]}
 
-Generate ONLY the JSON plan using existing layers:"""
+Generate ONLY the JSON plan with proper result reporting:"""
 
         try:
             response = self.model.generate_content(prompt)
@@ -260,28 +283,90 @@ Generate ONLY the JSON plan using existing layers:"""
                 self.logger.error(error_msg)
                 results.append({"step": step_num, "result": error_msg, "success": False})
         
-        # Summarize results
+        # Summarize results with proper user feedback
         successful_steps = [r for r in results if r['success']]
         failed_steps = [r for r in results if not r['success']]
         
         if failed_steps:
-            summary = f"Completed {len(successful_steps)}/{len(results)} steps successfully."
-            if failed_steps:
-                summary += f"\n\nFailed steps:\n" + "\n".join([f"Step {s['step']}: {s['result']}" for s in failed_steps])
+            summary = f"I encountered some issues while processing your request."
+            if successful_steps:
+                summary += f" I completed {len(successful_steps)} out of {len(results)} steps."
+            summary += "\n\nHere's what went wrong:\n" + "\n".join([f"• {s['result']}" for s in failed_steps])
         else:
-            summary = f"✅ All {len(results)} steps completed successfully!"
+            # Check if this was a simple conversational response
+            is_simple_response = (len(results) == 1 and 
+                                results[0].get('result', '').startswith('result = """') and 
+                                results[0].get('result', '').endswith('"""'))
             
-            # If we have analysis results, emit them
-            final_result = results[-1]['result'] if results else None
-            if isinstance(final_result, tuple) and len(final_result) == 2:
-                # Assume it's (gdf, layer_name)
-                self.analysis_completed.emit(final_result[0], final_result[1])
+            if is_simple_response:
+                # Extract and return the conversational message
+                result_text = results[0]['result']
+                start = result_text.find('"""') + 3
+                end = result_text.rfind('"""')
+                if start > 2 and end > start:
+                    return result_text[start:end].strip()
+            
+            # For analysis operations, provide contextual feedback
+            summary = ""
+            
+            # Extract meaningful results
+            for result in results:
+                result_content = result.get('result', '')
+                
+                # Handle different types of results
+                if isinstance(result_content, str):
+                    # Check if it's Python execution feedback
+                    if result_content.startswith("Code executed successfully"):
+                        continue  # Skip generic execution messages
+                    
+                    # If it contains meaningful information, use it as the primary response
+                    if (result_content and 
+                        not result_content.startswith("No output") and
+                        len(result_content) > 10):  # Meaningful content
+                        # This is likely the actual result from the 'result' variable
+                        return result_content  # Return immediately, don't concatenate
+                        
+                elif isinstance(result_content, (int, float)):
+                    summary += f"{result_content}"
+                elif isinstance(result_content, (list, tuple)) and result_content:
+                    if len(result_content) <= 5:
+                        summary += f"{', '.join(str(x) for x in result_content)}"
+                    else:
+                        summary += f"{len(result_content)} items"
+            
+            # If no meaningful summary was found, provide a friendly default
+            if not summary.strip():
+                summary = "Done! Your request has been processed successfully."
+            
+            # Add context about current layers only for analysis operations
+            try:
+                current_layers = data_manager.get_layer_names()
+                if current_layers and "buffer" in str(results).lower():
+                    # Only show layer context for operations that likely changed the map
+                    summary += f"\n\nYour map now has {len(current_layers)} layer(s): {', '.join(current_layers)}"
+            except Exception:
+                pass
         
         self.status_update.emit("✅ Plan execution completed")
         return summary
     
     def _execute_python_code(self, code, data_manager):
         """Execute Python code with full access to data and libraries"""
+        
+        # Clean the code - remove markdown formatting if present
+        if isinstance(code, str):
+            code = code.strip()
+            # Remove markdown code blocks
+            if code.startswith("```python"):
+                code = code[9:]  # Remove ```python
+            elif code.startswith("```"):
+                code = code[3:]   # Remove ```
+            
+            if code.endswith("```"):
+                code = code[:-3]  # Remove trailing ```
+            
+            code = code.strip()
+        
         self.logger.info(f"Executing Python code:\n{code}")
         
         # Create comprehensive execution environment
@@ -308,8 +393,8 @@ Generate ONLY the JSON plan using existing layers:"""
             'intersect_layers': lambda l1, l2: self.app_functions.intersect_layers(l1, l2) if self.app_functions else None,
             'select_by_attribute': lambda layer, col, val, op='equals': self.app_functions.select_by_attribute(layer, col, val, op) if self.app_functions else None,
             
-            # Map operations
-            'add_to_map': lambda gdf, name: self.app_functions.add_analysis_result(gdf, name) if self.app_functions else data_manager.add_analysis_result(gdf, name),
+            # Map operations - handle both GeoDataFrame and layer objects
+            'add_to_map': lambda layer_or_gdf, name=None: self._add_to_map_helper(layer_or_gdf, name, data_manager),
             'update_map': lambda: self.app_functions.update_map() if self.app_functions else None,
             'zoom_to_layer': lambda layer_name: self.app_functions.zoom_to_layer(layer_name) if self.app_functions else None,
             'refresh_ui': lambda: self.app_functions.refresh_ui() if self.app_functions else None,
@@ -334,7 +419,7 @@ Generate ONLY the JSON plan using existing layers:"""
         try:
             exec(code, execution_env)
             
-            # Return results in priority order
+            # Return results in priority order with better feedback
             if execution_env.get('result_gdf') is not None:
                 gdf = execution_env['result_gdf']
                 layer_name = execution_env.get('result_layer_name', 'analysis_result')
@@ -346,16 +431,33 @@ Generate ONLY the JSON plan using existing layers:"""
                         final_name = add_result['layer_name']
                         # Update map after adding
                         self.app_functions.update_map()
+                        return (gdf, final_name)
                     else:
                         final_name = data_manager.add_analysis_result(gdf, layer_name)
+                        return (gdf, final_name)
                 else:
                     final_name = data_manager.add_analysis_result(gdf, layer_name)
+                    return (gdf, final_name)
                     
-                return (gdf, final_name)
             elif execution_env.get('result') is not None:
-                return execution_env['result']
+                result_value = execution_env['result']
+                # If the result contains the friendly message from the buffer operation
+                if isinstance(result_value, str) and len(result_value) > 20:  # Likely a meaningful message
+                    return result_value
+                return result_value
             else:
-                return "Code executed successfully (no explicit result returned)"
+                # Check if any output was captured during execution
+                # Look for common result patterns in the executed code
+                if 'get_layer_names()' in code and 'print(' in code:
+                    layer_names = data_manager.get_layer_names()
+                    return f"Current layers ({len(layer_names)}): {', '.join(layer_names)}"
+                elif 'len(' in code and 'get_layer_names' in code:
+                    layer_count = len(data_manager.get_layer_names())
+                    return f"Number of layers on map: {layer_count}"
+                elif 'buffer_layer(' in code:
+                    return "Buffer operation completed successfully"
+                else:
+                    return "Code executed successfully"
                 
         except Exception as e:
             raise Exception(f"Python execution failed: {str(e)}")
@@ -391,3 +493,45 @@ result = 'Please provide more specific instructions for this request.'
             ],
             "success_criteria": "The code runs without error and uses existing layers"
         }
+    
+    def _create_simple_response(self, message):
+        """Create a simple response for conversational queries"""
+        return {
+            'plan': [{
+                'step': 1,
+                'description': 'Provide conversational response',
+                'action': 'respond',
+                'code': f'result = """{message}"""'
+            }],
+            'reasoning': 'Simple conversational response',
+            'confidence': 1.0,
+            'requires_execution': True
+        }
+    
+    def _add_to_map_helper(self, layer_or_gdf, name, data_manager):
+        """Helper to handle adding different types of layers to map"""
+        try:
+            # If it's already a GeoDataFrame, add it directly
+            if hasattr(layer_or_gdf, 'geometry'):
+                if self.app_functions:
+                    result = self.app_functions.add_analysis_result(layer_or_gdf, name)
+                    self.app_functions.update_map()
+                    return result
+                else:
+                    return data_manager.add_analysis_result(layer_or_gdf, name)
+            
+            # If it's a layer dict with 'layer' key (from buffer_layer result)
+            elif isinstance(layer_or_gdf, dict) and 'layer' in layer_or_gdf:
+                gdf = layer_or_gdf['layer']
+                if self.app_functions:
+                    result = self.app_functions.add_analysis_result(gdf, name)
+                    self.app_functions.update_map()
+                    return result
+                else:
+                    return data_manager.add_analysis_result(gdf, name)
+                    
+            else:
+                return f"Could not add layer to map - unexpected data type: {type(layer_or_gdf)}"
+                
+        except Exception as e:
+            return f"Error adding layer to map: {str(e)}"

@@ -98,7 +98,7 @@ class AppFunctions:
                 
                 # Update UI if available
                 if self.main_window:
-                    self.main_window.refresh_layer_panel()
+                    self.main_window.layer_panel.refresh_layers()
                     self.main_window.update_map()
                 
                 self.logger.info(f"Layer removed: {layer_name}")
@@ -138,14 +138,12 @@ class AppFunctions:
                 return {
                     'success': False,
                     'message': "Cannot add empty or null analysis result"
-                }
-            
-            # Add the layer to data manager
+                }            # Add the layer to data manager
             final_name = self.data_manager.add_analysis_result(gdf, layer_name)
             
             # Update UI if requested and available
             if show_on_map and self.main_window:
-                self.main_window.refresh_layer_panel()
+                self.main_window.layer_panel.refresh_layers()
                 self.main_window.update_map()
             
             self.logger.info(f"Analysis result added as layer: {final_name}")
@@ -323,7 +321,7 @@ class AppFunctions:
             # Update map
             if self.main_window:
                 self.main_window.update_map()
-                self.main_window.refresh_layer_panel()
+                self.main_window.layer_panel.refresh_layers()
             
             return {
                 'success': True,
@@ -626,7 +624,7 @@ class AppFunctions:
         """
         try:
             if self.main_window:
-                self.main_window.refresh_layer_panel()
+                self.main_window.layer_panel.refresh_layers()
                 self.main_window.update_map()
                 return {
                     'success': True,
