@@ -72,12 +72,7 @@ if not exist ".env" (
 
 REM Start the application
 echo 🖥️ Starting GIS Copilot Desktop...
-start python main.py
+python main.py
 
-echo.
-echo ✅ Application is starting...
-echo.
-echo If the application window doesn't appear, check for error messages above.
-echo The application runs in a separate window, so you can close this console.
-echo.
-pause
+REM The application will run in this window
+REM When the application closes, this script will end

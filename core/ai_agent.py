@@ -7,6 +7,7 @@ import os
 import uuid
 from shapely.geometry import Point, LineString, Polygon
 import numpy as np
+from .logger import get_logger
 
 class AIAgent(QObject):
     """AI agent for spatial analysis using Gemini"""
@@ -17,43 +18,64 @@ class AIAgent(QObject):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.logger = get_logger(__name__)
         
         # Initialize Gemini
         api_key = config.get('ai', {}).get('api_key') or os.getenv('GEMINI_API_KEY')
         if api_key:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            self.logger.info("AI Agent initialized with Gemini API")
         else:
             self.model = None
-            print("Warning: No Gemini API key provided. AI features will be disabled.")
+            self.logger.warning("No Gemini API key provided. AI features will be disabled.")
     
     def process_question(self, question, data_manager):
         """Process a spatial analysis question"""
+        self.logger.info(f"Processing question: '{question}'")
+        
         if not self.model:
+            self.logger.warning("AI model not available - API key not configured")
             return "AI features are disabled. Please configure your Gemini API key."
         
         try:
+            # Check if this is a greeting or simple message
+            greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+            if question.lower().strip() in greetings:
+                self.logger.info("Detected greeting message")
+                return "Hello! I'm your GIS assistant. I can help you analyze spatial data. Try asking questions like:\n\n• 'Show me places within 1000 meters of roads'\n• 'Find landuse areas that intersect with railways'\n• 'Buffer the roads by 500 meters'\n• 'Show me all features with type = residential'\n\nWhat would you like to analyze?"
+            
             available_layers = data_manager.get_layer_names()
+            self.logger.info(f"Available layers: {available_layers}")
+            
             if not available_layers:
+                self.logger.warning("No layers available for analysis")
                 return "No layers available. Please load some spatial data first."
             
             # Generate analysis code
+            self.logger.info("Generating analysis code...")
             code = self._generate_analysis_code(question, available_layers, data_manager)
             
             if code:
+                self.logger.info(f"Generated code:\n{code}")
                 # Execute the analysis
                 result = self._execute_analysis(code, data_manager)
+                self.logger.info(f"Analysis result: {result}")
                 return result
             else:
-                return "I couldn't understand your request. Please try rephrasing your question."
+                self.logger.warning("Could not generate analysis code")
+                return "I couldn't understand your request. Please try rephrasing your question or ask something like:\n\n• 'Buffer roads by 500 meters'\n• 'Find places near railways'\n• 'Select landuse where type = forest'"
                 
         except Exception as e:
             error_msg = f"Error processing question: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
             self.analysis_failed.emit(error_msg)
             return error_msg
     
     def _generate_analysis_code(self, question, available_layers, data_manager):
         """Generate Python code for spatial analysis"""
+        
+        self.logger.info(f"Generating analysis code for question: '{question}'")
         
         # Get layer information for context
         layer_info = []
@@ -63,6 +85,7 @@ class AIAgent(QObject):
                 layer_info.append(f"- {layer_name}: {info['geometry_type']}, {info['feature_count']} features, columns: {info['columns']}")
         
         layer_context = "\n".join(layer_info)
+        self.logger.debug(f"Layer context:\n{layer_context}")
         
         prompt = f"""You are an AI assistant for spatial analysis. Generate Python code to answer the user's question.
 
@@ -91,8 +114,10 @@ User question: {question}
 Generate only the Python code, no explanations:"""
 
         try:
+            self.logger.debug("Sending prompt to Gemini API...")
             response = self.model.generate_content(prompt)
             code = response.text.strip()
+            self.logger.debug(f"Raw response from Gemini: {code}")
             
             # Clean the code
             if code.startswith("```python"):
@@ -102,14 +127,18 @@ Generate only the Python code, no explanations:"""
             if code.endswith("```"):
                 code = code[:-3]
             
-            return code.strip()
+            cleaned_code = code.strip()
+            self.logger.info(f"Cleaned generated code:\n{cleaned_code}")
+            return cleaned_code
             
         except Exception as e:
-            print(f"Error generating code: {e}")
+            self.logger.error(f"Error generating code: {e}", exc_info=True)
             return None
     
     def _execute_analysis(self, code, data_manager):
         """Execute the generated analysis code"""
+        self.logger.info(f"Executing analysis code:\n{code}")
+        
         try:
             # Create execution environment with spatial functions
             execution_env = {
@@ -124,23 +153,32 @@ Generate only the Python code, no explanations:"""
                 'result_layer_name': 'analysis_result'
             }
             
+            self.logger.debug("Executing code in sandbox environment...")
             # Execute the code
             exec(code, execution_env)
             
             result_gdf = execution_env.get('result_gdf')
             result_layer_name = execution_env.get('result_layer_name', 'analysis_result')
             
+            self.logger.info(f"Code execution completed. Result GDF: {type(result_gdf)}, Layer name: {result_layer_name}")
+            
             if result_gdf is not None and not result_gdf.empty:
+                self.logger.info(f"Analysis produced {len(result_gdf)} features")
                 # Add the result as a new layer
                 final_layer_name = data_manager.add_analysis_result(result_gdf, result_layer_name)
                 self.analysis_completed.emit(result_gdf, final_layer_name)
                 return f"Analysis completed! Created new layer: '{final_layer_name}' with {len(result_gdf)} features."
             else:
-                return "Analysis completed but produced no results."
+                self.logger.warning("Analysis completed but produced no results or empty result")
+                if result_gdf is None:
+                    return "The analysis didn't produce any data. This might be because:\n• The generated code didn't set 'result_gdf'\n• The query didn't match any features\n• There was an issue with the analysis logic"
+                else:
+                    return "The analysis completed but found no matching features. Try:\n• Adjusting your criteria\n• Checking if the layers have the data you're looking for\n• Using different layer names or column values"
                 
         except Exception as e:
             error_msg = f"Error executing analysis: {str(e)}"
-            print(f"Analysis code that failed:\n{code}")
+            self.logger.error(f"Analysis code execution failed: {error_msg}", exc_info=True)
+            self.logger.error(f"Failed code:\n{code}")
             return error_msg
     
     def _buffer_layer(self, layer_name, distance_meters, data_manager):

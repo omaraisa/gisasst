@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 from core.data_manager import DataManager
 from core.ai_agent import AIAgent
+from core.advanced_ai_agent import AdvancedGISAgent
 from core.map_manager import MapManager
 from core.logger import setup_logging, get_logger, log_system_info, cleanup_old_logs
 from ui.file_browser import FileBrowser
@@ -45,7 +46,7 @@ class GISCopilotApp(QMainWindow):
             
             # Initialize core components
             self.data_manager = DataManager()
-            self.ai_agent = AIAgent(self.config)
+            self.ai_agent = AdvancedGISAgent(self.config)  # Using Advanced Agent
             self.map_manager = MapManager()
             
             self.init_ui()

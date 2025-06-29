@@ -17,7 +17,12 @@ class ChatWorker(QThread):
         
     def run(self):
         try:
-            response = self.ai_agent.process_question(self.question, self.data_manager)
+            # Use the new process_request method for advanced agent
+            if hasattr(self.ai_agent, 'process_request'):
+                response = self.ai_agent.process_request(self.question, self.data_manager)
+            else:
+                # Fallback to old method for compatibility
+                response = self.ai_agent.process_question(self.question, self.data_manager)
             self.response_ready.emit(response)
         except Exception as e:
             self.error_occurred.emit(str(e))
@@ -114,6 +119,10 @@ class ChatPanel(QWidget):
         self.ai_agent.analysis_completed.connect(self.on_analysis_completed)
         self.ai_agent.analysis_failed.connect(self.on_analysis_failed)
         
+        # Connect status updates for advanced agent
+        if hasattr(self.ai_agent, 'status_update'):
+            self.ai_agent.status_update.connect(self.on_status_update)
+        
     def add_message(self, sender, message, msg_type="user"):
         """Add a message to the chat display"""
         cursor = self.chat_display.textCursor()
@@ -199,6 +208,10 @@ class ChatPanel(QWidget):
         """Handle analysis failure"""
         self.add_message("AI", f"❌ Analysis failed: {error_message}")
         
+    def on_status_update(self, status_message):
+        """Handle status updates from advanced agent"""
+        self.add_message("AI", f"🔄 {status_message}", "system")
+    
     def remove_last_message(self):
         """Remove the last message (used to remove processing indicator)"""
         text = self.chat_display.toPlainText()
