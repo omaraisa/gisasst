@@ -35,8 +35,8 @@ class AdvancedGISAgent(QObject):
             self.logger.warning("No Gemini API key provided. AI features will be disabled.")
     
     def process_request(self, user_request, data_manager):
-        """Process any user request using tool-based approach"""
-        self.logger.info(f"Processing advanced request: '{user_request}'")
+        """Process any user request using pure AI-driven approach"""
+        self.logger.info(f"Processing request: '{user_request}'")
         
         if not self.model:
             return "AI features are disabled. Please configure your Gemini API key."
@@ -115,33 +115,8 @@ class AdvancedGISAgent(QObject):
         return [
             {
                 "name": "execute_python_code",
-                "description": "Execute Python code for data analysis",
+                "description": "Execute Python code for any analysis or operation",
                 "parameters": ["code"]
-            },
-            {
-                "name": "install_package",
-                "description": "Install Python packages using pip",
-                "parameters": ["package_name"]
-            },
-            {
-                "name": "run_command",
-                "description": "Execute system commands",
-                "parameters": ["command"]
-            },
-            {
-                "name": "spatial_analysis",
-                "description": "Perform spatial analysis operations",
-                "parameters": ["operation", "layers", "parameters"]
-            },
-            {
-                "name": "data_manipulation",
-                "description": "Manipulate and transform data",
-                "parameters": ["data_source", "operations"]
-            },
-            {
-                "name": "file_operations",
-                "description": "Read, write, and manage files",
-                "parameters": ["operation", "file_path", "content"]
             }
         ]
     
@@ -149,66 +124,106 @@ class AdvancedGISAgent(QObject):
         """Generate step-by-step execution plan"""
         self.status_update.emit("🧠 Analyzing request and creating execution plan...")
         
+        # Get available app functions
+        app_functions_info = ""
+        if self.app_functions:
+            funcs_result = self.app_functions.get_available_functions()
+            if funcs_result['success']:
+                app_functions_info = json.dumps(funcs_result['functions'], indent=2)
+        
         # Create comprehensive prompt
-        prompt = f"""You are an advanced autonomous GIS agent. Your task is to create a detailed execution plan for the user's request.
+        prompt = f"""You are an advanced autonomous GIS agent. Analyze the user's request and create a detailed execution plan.
 
 USER REQUEST: {user_request}
 
-SYSTEM CONTEXT:
-Available Layers: {json.dumps(context['available_layers'], indent=2)}
-Installed Packages: {[pkg['name'] for pkg in context['installed_packages'][:20]]}
-Available Tools: {json.dumps(context['available_tools'], indent=2)}
+CURRENTLY LOADED LAYERS (DO NOT READ FROM FILES):
+{json.dumps(context['available_layers'], indent=2)}
 
-CONVERSATION HISTORY:
-{json.dumps(self.conversation_history[-5:], indent=2)}
+CRITICAL RULES - NEVER VIOLATE THESE:
+1. NEVER use gpd.read_file() or read any files - layers are already loaded!
+2. ALWAYS use get_layer(layer_name) to access existing layers
+3. Available layer names are: {[layer['name'] for layer in context.get('available_layers', [])]}
+4. Use buffer_layer(layer_name, distance, unit) for buffering operations
+5. Use add_to_map(gdf, layer_name) to add results to the map
+6. Use update_map() to refresh the display
 
-Create a JSON execution plan with this structure:
+EXECUTION ENVIRONMENT FUNCTIONS:
+- get_layer(name): Returns GeoDataFrame of existing layer
+- get_layer_names(): Returns list of loaded layer names  
+- buffer_layer(layer_name, distance, unit): Creates buffer using app functions
+- add_to_map(gdf, name): Adds result to map and updates display
+- update_map(): Refreshes map display
+- app_functions: Direct access to all app operations
+
+EXAMPLE CORRECT CODE FOR BUFFER:
+```python
+# Get the existing layer (don't read from file!)
+layer_data = get_layer('landuse')
+print(f"Got layer with {{len(layer_data)}} features")
+
+# Use the app function to create buffer
+result = buffer_layer('landuse', 1000, 'meters')
+print(f"Buffer result: {{result}}")
+
+# The buffer_layer function automatically adds to map
+```
+
+WRONG - NEVER DO THIS:
+```python
+# WRONG! Don't read files
+landuse = gpd.read_file('landuse.shp')  # DON'T DO THIS!
+```
+
+Create a JSON execution plan with ONLY execute_python_code actions:
 {{
-    "analysis": "Brief analysis of what the user wants",
-    "approach": "High-level approach to solve this",
+    "analysis": "What the user wants to accomplish",
+    "approach": "Use existing loaded layers and app functions",
     "steps": [
         {{
             "step": 1,
-            "action": "tool_name",
-            "description": "What this step does",
-            "parameters": {{"param": "value"}},
+            "action": "execute_python_code",
+            "description": "What this code does",
+            "parameters": {{
+                "code": "Python code using get_layer() and app functions"
+            }},
             "expected_outcome": "What should happen"
         }}
     ],
-    "success_criteria": "How to determine if successful",
-    "fallback_options": ["Alternative approaches if main plan fails"]
+    "success_criteria": "How to know if successful"
 }}
 
-AVAILABLE ACTIONS:
-- execute_python_code: Run any Python code for analysis
-- install_package: Install missing packages
-- run_command: Execute system commands
-- spatial_analysis: Perform GIS operations
-- data_manipulation: Transform data
-- file_operations: Handle files
+AVAILABLE LAYERS: {[layer['name'] for layer in context.get('available_layers', [])]}
 
-RULES:
-1. Break complex tasks into simple steps
-2. Always check prerequisites first
-3. Handle potential errors
-4. Be specific about parameters
-5. Consider data dependencies
-
-Generate ONLY the JSON plan, no other text:"""
+Generate ONLY the JSON plan using existing layers:"""
 
         try:
             response = self.model.generate_content(prompt)
             plan_text = response.text.strip()
             
-            # Clean JSON
+            # Clean JSON - handle multiple formats
             if plan_text.startswith("```json"):
-                plan_text = plan_text[7:-3]
+                plan_text = plan_text[7:]
+                if plan_text.endswith("```"):
+                    plan_text = plan_text[:-3]
             elif plan_text.startswith("```"):
-                plan_text = plan_text[3:-3]
+                plan_text = plan_text[3:]
+                if plan_text.endswith("```"):
+                    plan_text = plan_text[:-3]
             
+            # Remove any leading/trailing whitespace
+            plan_text = plan_text.strip()
+            
+            # Try to parse JSON
             plan = json.loads(plan_text)
             self.logger.info(f"Generated execution plan: {json.dumps(plan, indent=2)}")
             return plan
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"JSON parsing error: {e}")
+            self.logger.error(f"Raw response text: {plan_text}")
+            
+            # Create a simple fallback plan
+            return self._create_fallback_plan(user_request, context)
             
         except Exception as e:
             self.logger.error(f"Error generating plan: {e}")
@@ -231,20 +246,11 @@ Generate ONLY the JSON plan, no other text:"""
             self.logger.info(f"Executing step {step_num}: {action} - {description}")
             
             try:
+                # Only support execute_python_code - let AI write all logic
                 if action == "execute_python_code":
                     result = self._execute_python_code(parameters.get('code', ''), data_manager)
-                elif action == "install_package":
-                    result = self._install_package(parameters.get('package_name', ''))
-                elif action == "run_command":
-                    result = self._run_command(parameters.get('command', ''))
-                elif action == "spatial_analysis":
-                    result = self._spatial_analysis(parameters, data_manager)
-                elif action == "data_manipulation":
-                    result = self._data_manipulation(parameters, data_manager)
-                elif action == "file_operations":
-                    result = self._file_operations(parameters)
                 else:
-                    result = f"Unknown action: {action}"
+                    result = f"Unsupported action: {action}. Only execute_python_code is supported."
                 
                 results.append({"step": step_num, "result": result, "success": True})
                 self.logger.info(f"Step {step_num} completed successfully")
@@ -253,11 +259,6 @@ Generate ONLY the JSON plan, no other text:"""
                 error_msg = f"Step {step_num} failed: {str(e)}"
                 self.logger.error(error_msg)
                 results.append({"step": step_num, "result": error_msg, "success": False})
-                
-                # Try fallback options if available
-                if step_num == 1 and plan.get('fallback_options'):
-                    self.status_update.emit("🔄 Trying alternative approach...")
-                    # Could implement fallback logic here
         
         # Summarize results
         successful_steps = [r for r in results if r['success']]
@@ -296,25 +297,38 @@ Generate ONLY the JSON plan, no other text:"""
             'subprocess': subprocess,
             'Path': Path,
             
-            # Data manager functions (legacy)
-            'get_layer': lambda name: data_manager.get_layer(name),
+            # Data access functions - THESE ARE THE CORRECT WAYS TO ACCESS DATA
+            'get_layer': lambda name: data_manager.get_layer(name)['gdf'] if name in data_manager.layers else None,
             'get_layer_names': lambda: data_manager.get_layer_names(),
-            'add_analysis_result': lambda gdf, name: data_manager.add_analysis_result(gdf, name),
+            'get_layer_info': lambda name: data_manager.get_layer_info(name),
             
-            # App functions - centralized operations
+            # App functions - centralized operations (preferred methods)
             'app_functions': self.app_functions,
-            'load_layer': lambda path, name=None: self.app_functions.load_layer(path, name) if self.app_functions else None,
-            'add_to_map': lambda gdf, name: self.app_functions.add_analysis_result(gdf, name) if self.app_functions else None,
-            'buffer_layer': lambda layer, dist, unit='meters': self.app_functions.buffer_layer(layer, dist, unit) if self.app_functions else None,
+            'buffer_layer': lambda layer_name, distance, unit='meters': self.app_functions.buffer_layer(layer_name, distance, unit) if self.app_functions else None,
             'intersect_layers': lambda l1, l2: self.app_functions.intersect_layers(l1, l2) if self.app_functions else None,
             'select_by_attribute': lambda layer, col, val, op='equals': self.app_functions.select_by_attribute(layer, col, val, op) if self.app_functions else None,
+            
+            # Map operations
+            'add_to_map': lambda gdf, name: self.app_functions.add_analysis_result(gdf, name) if self.app_functions else data_manager.add_analysis_result(gdf, name),
             'update_map': lambda: self.app_functions.update_map() if self.app_functions else None,
-            'zoom_to_layer': lambda layer: self.app_functions.zoom_to_layer(layer) if self.app_functions else None,
+            'zoom_to_layer': lambda layer_name: self.app_functions.zoom_to_layer(layer_name) if self.app_functions else None,
+            'refresh_ui': lambda: self.app_functions.refresh_ui() if self.app_functions else None,
+            
+            # File operations (when needed)
+            'load_layer': lambda path, name=None: self.app_functions.load_layer(path, name) if self.app_functions else None,
+            'export_layer': lambda layer_name, path: self.app_functions.export_layer(layer_name, path) if self.app_functions else None,
+            
+            # Legacy support (but discourage file reading)
+            'add_analysis_result': lambda gdf, name: data_manager.add_analysis_result(gdf, name),
             
             # Results placeholder
             'result_gdf': None,
             'result_layer_name': 'analysis_result',
-            'result': None
+            'result': None,
+            
+            # Helper functions
+            'print': print,  # Ensure print works
+            'len': len,      # Ensure len works
         }
         
         try:
@@ -346,122 +360,34 @@ Generate ONLY the JSON plan, no other text:"""
         except Exception as e:
             raise Exception(f"Python execution failed: {str(e)}")
     
-    def _install_package(self, package_name):
-        """Install Python package"""
-        self.logger.info(f"Installing package: {package_name}")
-        
-        try:
-            result = subprocess.run([
-                sys.executable, "-m", "pip", "install", package_name
-            ], capture_output=True, text=True, timeout=120)
-            
-            if result.returncode == 0:
-                return f"Successfully installed {package_name}"
-            else:
-                return f"Failed to install {package_name}: {result.stderr}"
-                
-        except Exception as e:
-            raise Exception(f"Package installation failed: {str(e)}")
-    
-    def _run_command(self, command):
-        """Execute system command"""
-        self.logger.info(f"Running command: {command}")
-        
-        try:
-            result = subprocess.run(
-                command, shell=True, capture_output=True, text=True, timeout=60
-            )
-            
-            output = result.stdout or result.stderr
-            return f"Command executed. Output: {output[:500]}..."
-            
-        except Exception as e:
-            raise Exception(f"Command execution failed: {str(e)}")
-    
-    def _spatial_analysis(self, parameters, data_manager):
-        """Perform spatial analysis operations using app_functions"""
-        operation = parameters.get('operation', '')
-        layers = parameters.get('layers', [])
-        params = parameters.get('parameters', {})
-        
-        self.logger.info(f"Performing spatial analysis: {operation}")
-        
-        if not self.app_functions:
-            return "App functions not available for spatial analysis"
-        
-        try:
-            # Handle different spatial operations
-            if operation == 'buffer':
-                layer_name = params.get('layer_name')
-                distance = params.get('distance', 100)
-                unit = params.get('unit', 'meters')
-                
-                result = self.app_functions.buffer_layer(layer_name, distance, unit)
-                if result['success']:
-                    return f"Buffer analysis completed: {result['message']}"
-                else:
-                    return f"Buffer analysis failed: {result['message']}"
-                    
-            elif operation == 'intersect':
-                layer1 = params.get('layer1')
-                layer2 = params.get('layer2')
-                
-                result = self.app_functions.intersect_layers(layer1, layer2)
-                if result['success']:
-                    return f"Intersection analysis completed: {result['message']}"
-                else:
-                    return f"Intersection analysis failed: {result['message']}"
-                    
-            elif operation == 'select_by_attribute':
-                layer_name = params.get('layer_name')
-                column = params.get('column')
-                value = params.get('value')
-                operator = params.get('operator', 'equals')
-                
-                result = self.app_functions.select_by_attribute(layer_name, column, value, operator)
-                if result['success']:
-                    return f"Attribute selection completed: {result['message']}"
-                else:
-                    return f"Attribute selection failed: {result['message']}"
-                    
-            else:
-                # Fall back to Python code execution for custom operations
-                code = f"""
-# Spatial analysis: {operation}
-# Available layers: {layers}
-# Parameters: {params}
+    def _create_fallback_plan(self, user_request, context):
+        """Create a minimal fallback plan if AI output is not valid JSON"""
+        self.logger.info("Creating fallback execution plan")
+        return {
+            "analysis": f"User requested: {user_request}",
+            "approach": "Execute Python code using existing layers and app functions",
+            "steps": [
+                {
+                    "step": 1,
+                    "action": "execute_python_code",
+                    "description": "Process the user request with available data and functions",
+                    "parameters": {
+                        "code": f"""
+# User request: {user_request}
+# Available layers: {[layer['name'] for layer in context.get('available_layers', [])]}
 
-# Get available layers
-layer_names = get_layer_names()
-print(f"Available layers: {{layer_names}}")
+print("Processing request:", {repr(user_request)})
+print("Available layers:", get_layer_names())
 
-# Add your custom spatial analysis logic here
-result = f"Custom spatial analysis '{operation}' completed"
+# Example of correct usage:
+# layer_data = get_layer('layer_name')  # Get existing layer
+# result = buffer_layer('layer_name', 1000, 'meters')  # Use app function
+
+result = 'Please provide more specific instructions for this request.'
 """
-                return self._execute_python_code(code, data_manager)
-                
-        except Exception as e:
-            error_msg = f"Spatial analysis error: {str(e)}"
-            self.logger.error(error_msg)
-            return error_msg
-    
-    def _data_manipulation(self, parameters, data_manager):
-        """Perform data manipulation"""
-        # Similar to spatial analysis, but for data operations
-        return "Data manipulation completed"
-    
-    def _file_operations(self, parameters):
-        """Handle file operations"""
-        operation = parameters.get('operation', '')
-        file_path = parameters.get('file_path', '')
-        content = parameters.get('content', '')
-        
-        if operation == 'read':
-            with open(file_path, 'r') as f:
-                return f.read()
-        elif operation == 'write':
-            with open(file_path, 'w') as f:
-                f.write(content)
-            return f"File written to {file_path}"
-        else:
-            return f"Unknown file operation: {operation}"
+                    },
+                    "expected_outcome": "Process the request using available functions"
+                }
+            ],
+            "success_criteria": "The code runs without error and uses existing layers"
+        }
