@@ -36,13 +36,17 @@ class FileBrowser(QWidget):
         nav_layout.addWidget(self.path_edit)
         
         up_btn = QPushButton("↑")
-        up_btn.setMaximumWidth(30)
+        up_btn.setMaximumWidth(40)
+        up_btn.setMaximumHeight(32)
+        up_btn.setStyleSheet("QPushButton { padding: 8px; font-size: 12px; }")
         up_btn.setToolTip("Go up one directory")
         up_btn.clicked.connect(self.go_up)
         nav_layout.addWidget(up_btn)
         
         browse_btn = QPushButton("...")
-        browse_btn.setMaximumWidth(30)
+        browse_btn.setMaximumWidth(40)
+        browse_btn.setMaximumHeight(32)
+        browse_btn.setStyleSheet("QPushButton { padding: 8px; font-size: 12px; }")
         browse_btn.setToolTip("Browse for folder")
         browse_btn.clicked.connect(self.browse_folder)
         nav_layout.addWidget(browse_btn)
@@ -54,15 +58,18 @@ class FileBrowser(QWidget):
         self.file_tree.setHeaderLabels(["Name", "Type"])
         self.file_tree.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.file_tree.setAlternatingRowColors(True)
+        # Enable multiple selection
+        self.file_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         layout.addWidget(self.file_tree)
         
         # Load button
-        load_btn = QPushButton("Load Selected File")
-        load_btn.clicked.connect(self.load_selected_file)
+        load_btn = QPushButton("Load Selected File(s)")
+        load_btn.setStyleSheet("QPushButton { padding: 8px 16px; font-size: 12px; }")
+        load_btn.clicked.connect(self.load_selected_files)
         layout.addWidget(load_btn)
         
         # Supported formats info
-        info_label = QLabel("Supported: .shp, .geojson, .json, .csv, .kml, .gpx, .gdb")
+        info_label = QLabel("Supported: .shp, .geojson, .json, .csv, .kml, .gpx, .gdb (geodatabase)")
         info_label.setStyleSheet("color: #666; font-size: 10px; padding: 5px;")
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
@@ -87,10 +94,24 @@ class FileBrowser(QWidget):
             
             # Add files
             spatial_extensions = {'.shp', '.geojson', '.json', '.csv', '.kml', '.gpx', '.gdb'}
+            shapefile_companion_extensions = {'.dbf', '.shx', '.prj', '.sbn', '.sbx', '.fbn', '.fbx', '.ain', '.aih', '.ixs', '.mxs', '.atx', '.cpg', '.qix'}
             
             for item in sorted(self.current_path.iterdir()):
                 if item.is_file():
+                    # Skip shapefile companion files
+                    if item.suffix.lower() in shapefile_companion_extensions:
+                        continue
+                        
                     is_spatial = item.suffix.lower() in spatial_extensions
+                    
+                    # For .gdb folders, show them as files
+                    if item.suffix.lower() == '.gdb':
+                        tree_item = QTreeWidgetItem([item.name, "Geodatabase"])
+                        tree_item.setData(0, Qt.UserRole, str(item))
+                        tree_item.setIcon(0, self.style().standardIcon(self.style().SP_FileIcon))
+                        tree_item.setBackground(0, tree_item.background(0).color().lighter(120))
+                        self.file_tree.addTopLevelItem(tree_item)
+                        continue
                     
                     tree_item = QTreeWidgetItem([item.name, "Spatial File" if is_spatial else "File"])
                     tree_item.setData(0, Qt.UserRole, str(item))
@@ -105,6 +126,16 @@ class FileBrowser(QWidget):
                         tree_item.setDisabled(True)
                     
                     self.file_tree.addTopLevelItem(tree_item)
+            
+            # Check for .gdb directories and show them as spatial files
+            for item in sorted(self.current_path.iterdir()):
+                if item.is_dir() and item.suffix.lower() == '.gdb':
+                    tree_item = QTreeWidgetItem([item.name, "Geodatabase"])
+                    tree_item.setData(0, Qt.UserRole, str(item))
+                    tree_item.setIcon(0, self.style().standardIcon(self.style().SP_DirIcon))
+                    # Highlight geodatabase
+                    tree_item.setBackground(0, tree_item.background(0).color().lighter(120))
+                    self.file_tree.addTopLevelItem(tree_item)
                     
         except PermissionError:
             QMessageBox.warning(self, "Permission Error", "Cannot access this directory.")
@@ -117,10 +148,10 @@ class FileBrowser(QWidget):
         """Handle double-click on tree item"""
         file_path = Path(item.data(0, Qt.UserRole))
         
-        if file_path.is_dir():
+        if file_path.is_dir() and not file_path.suffix.lower() == '.gdb':
             self.current_path = file_path
             self.refresh_files()
-        elif file_path.is_file():
+        elif file_path.is_file() or file_path.suffix.lower() == '.gdb':
             self.load_file(str(file_path))
     
     def load_selected_file(self):
@@ -128,7 +159,7 @@ class FileBrowser(QWidget):
         current_item = self.file_tree.currentItem()
         if current_item:
             file_path = Path(current_item.data(0, Qt.UserRole))
-            if file_path.is_file():
+            if file_path.is_file() or file_path.suffix.lower() == '.gdb':
                 self.load_file(str(file_path))
             else:
                 QMessageBox.information(self, "Info", "Please select a file to load.")
@@ -141,11 +172,7 @@ class FileBrowser(QWidget):
             success = self.data_manager.load_file(file_path)
             if success:
                 self.file_selected.emit(file_path)
-                QMessageBox.information(
-                    self, 
-                    "Success", 
-                    f"Successfully loaded {os.path.basename(file_path)}"
-                )
+                # Don't show success message box - just emit signal
             else:
                 QMessageBox.warning(
                     self, 
@@ -195,3 +222,53 @@ class FileBrowser(QWidget):
             self.refresh_files()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error setting path: {str(e)}")
+    
+    def load_selected_files(self):
+        """Load all currently selected files"""
+        selected_items = self.file_tree.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "Info", "Please select one or more files to load.")
+            return
+        
+        spatial_files = []
+        for item in selected_items:
+            file_path = Path(item.data(0, Qt.UserRole))
+            if file_path.is_file() or file_path.suffix.lower() == '.gdb':
+                spatial_files.append(str(file_path))
+        
+        if not spatial_files:
+            QMessageBox.information(self, "Info", "Please select spatial files to load.")
+            return
+        
+        # Load each file
+        loaded_count = 0
+        failed_files = []
+        
+        for file_path in spatial_files:
+            try:
+                success = self.data_manager.load_file(file_path)
+                if success:
+                    loaded_count += 1
+                    self.file_selected.emit(file_path)
+                else:
+                    failed_files.append(os.path.basename(file_path))
+            except Exception as e:
+                failed_files.append(f"{os.path.basename(file_path)} ({str(e)})")
+        
+        # Show summary
+        if loaded_count > 0:
+            if failed_files:
+                QMessageBox.warning(
+                    self, 
+                    "Partial Success", 
+                    f"Loaded {loaded_count} file(s) successfully.\n\nFailed to load:\n" + 
+                    "\n".join(failed_files[:5]) + ("..." if len(failed_files) > 5 else "")
+                )
+            # If all successful, no popup message - just status updates
+        else:
+            QMessageBox.critical(
+                self, 
+                "Error", 
+                "Failed to load any selected files:\n" + 
+                "\n".join(failed_files[:5]) + ("..." if len(failed_files) > 5 else "")
+            )

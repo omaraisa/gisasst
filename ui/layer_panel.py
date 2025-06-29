@@ -10,6 +10,7 @@ class LayerPanel(QWidget):
     """Panel for managing map layers"""
     
     layer_visibility_changed = pyqtSignal()
+    zoom_to_layer_requested = pyqtSignal(str)  # layer_name
     
     def __init__(self, data_manager, map_manager):
         super().__init__()
@@ -40,11 +41,13 @@ class LayerPanel(QWidget):
         button_layout = QHBoxLayout()
         
         self.remove_button = QPushButton("Remove")
+        self.remove_button.setStyleSheet("QPushButton { padding: 8px 16px; font-size: 12px; }")
         self.remove_button.clicked.connect(self.remove_selected_layer)
         self.remove_button.setEnabled(False)
         button_layout.addWidget(self.remove_button)
         
         self.export_button = QPushButton("Export")
+        self.export_button.setStyleSheet("QPushButton { padding: 8px 16px; font-size: 12px; }")
         self.export_button.clicked.connect(self.export_selected_layer)
         self.export_button.setEnabled(False)
         button_layout.addWidget(self.export_button)
@@ -186,9 +189,8 @@ class LayerPanel(QWidget):
         
     def zoom_to_layer(self, layer_name):
         """Zoom map to layer extent"""
-        # This would require communication with the map
-        # For now, just show a message
-        QMessageBox.information(self, "Zoom", f"Zoom to {layer_name} (feature not implemented)")
+        # Emit signal to request zoom
+        self.zoom_to_layer_requested.emit(layer_name)
         
     def toggle_layer_visibility(self, layer_name):
         """Toggle layer visibility"""

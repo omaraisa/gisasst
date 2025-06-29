@@ -22,7 +22,7 @@ class AIAgent(QObject):
         api_key = config.get('ai', {}).get('api_key') or os.getenv('GEMINI_API_KEY')
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.GenerativeModel('gemini-2.5-flash-latest')
         else:
             self.model = None
             print("Warning: No Gemini API key provided. AI features will be disabled.")

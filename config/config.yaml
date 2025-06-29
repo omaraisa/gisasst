@@ -1,7 +1,7 @@
 # Configuration file for GIS Copilot Desktop
 
 ai:
-  model: "gemini-pro"
+  model: "gemini-2.5-flash-latest"
   api_key: ""  # Set this via environment variable GEMINI_API_KEY
   
 map:

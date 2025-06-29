@@ -10,3 +10,6 @@ matplotlib
 folium
 PyQtWebEngine
 QDarkStyle
+# GDAL support - use conda-forge or pre-built wheels
+# Note: GDAL installation on Windows can be complex
+# If GDAL fails to install, the app will still work with basic GIS formats

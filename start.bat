@@ -18,19 +18,12 @@ if not exist "venv" (
         echo.
         echo 📋 Running automated setup...
         call SETUP.bat
-        if !errorlevel! equ 0 (
-            echo.
-            echo ✅ Setup completed successfully! Starting application...
-            echo.
-        ) else (
-            echo.
-            echo ❌ Setup failed. Please check the error messages above.
-            pause
-            exit /b 1
-        )
+        exit /b 0
     ) else (
         echo.
-        echo Continuing with manual setup...
+        echo ❌ Cannot start without setup. Please run SETUP.bat first.
+        pause
+        exit /b 1
     )
 )
 
@@ -46,82 +39,29 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
-REM Check if virtual environment exists
-if not exist "venv" (
-    echo 📦 Creating virtual environment...
-    python -m venv venv
-    if !errorlevel! neq 0 (
-        echo ❌ Failed to create virtual environment
-        echo.
-        echo 💡 Possible solutions:
-        echo    1. Make sure Python is properly installed
-        echo    2. Run as Administrator if needed
-        echo    3. Check if antivirus is blocking the operation
-        echo.
-        pause
-        exit /b 1
-    )
-)
-
 REM Activate virtual environment
-echo 📚 Activating virtual environment...
+echo � Activating virtual environment...
 call venv\Scripts\activate.bat
-
-REM Install/update requirements with SSL error handling
-echo 📥 Installing/updating requirements...
-
-REM First try with trusted hosts (bypass SSL issues)
-echo 🔒 Attempting installation with trusted hosts...
-pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
-
 if !errorlevel! neq 0 (
-    echo ⚠️  First attempt failed, trying with timeout and retry...
-    
-    REM Try with increased timeout and retries
-    pip install --timeout 300 --retries 5 --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
-    
-    if !errorlevel! neq 0 (
-        echo ⚠️  Standard installation failed, trying individual packages...
-        
-        REM Install packages one by one to identify problematic ones
-        echo 📦 Installing PyQt5...
-        pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org PyQt5
-        
-        echo 📦 Installing geopandas...
-        pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org geopandas
-        
-        echo 📦 Installing other packages...
-        pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org shapely fiona pyproj google-generativeai pyyaml python-dotenv matplotlib folium QDarkStyle
-        
-        echo ⚠️  Attempting PyQtWebEngine installation (this may take a while)...
-        pip install --timeout 600 --retries 3 --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org PyQtWebEngine
-          if !errorlevel! neq 0 (
-            echo ❌ PyQtWebEngine installation failed. The application will still work but web features may be limited.
-            echo.
-            echo 💡 Common solutions:
-            echo    1. Run: install_webengine.bat
-            echo    2. Check INSTALLATION.md for detailed troubleshooting
-            echo    3. Continue without PyQtWebEngine (app still works!)
-            echo.
-            set /p response="Continue without PyQtWebEngine? (y/n): "
-            if /i not "!response!"=="y" (
-                echo.
-                echo 📖 For detailed installation help, see:
-                echo    INSTALLATION.md
-                echo    QUICKSTART.md  
-                echo.
-                pause
-                exit /b 1
-            )
-        )
-    )
+    echo ❌ Failed to activate virtual environment.
+    echo.
+    echo Please run SETUP.bat to create the virtual environment.
+    pause
+    exit /b 1
 )
 
 REM Check if .env exists
 if not exist ".env" (
     echo 📝 Creating .env file from template...
-    copy .env.template .env
-    echo ✅ .env file created successfully!
+    if exist ".env.template" (
+        copy ".env.template" ".env" >nul
+        echo ✅ .env file created successfully!
+    ) else (
+        echo GEMINI_API_KEY=your_api_key_here> .env
+        echo DEBUG=False>> .env
+        echo LOG_LEVEL=INFO>> .env
+        echo ✅ Created basic .env file
+    )
     echo.
     echo ⚠️  Important: Please edit .env file and add your Gemini API key!
     echo Get your API key from: https://aistudio.google.com/app/apikey
@@ -132,28 +72,12 @@ if not exist ".env" (
 
 REM Start the application
 echo 🖥️ Starting GIS Copilot Desktop...
-python main.py
-
-if !errorlevel! neq 0 (
-    echo.
-    echo ❌ Application failed to start. Error code: !errorlevel!
-    echo.
-    echo 💡 Common solutions:
-    echo    1. Check if all packages installed correctly
-    echo    2. Verify your .env file has a valid API key  
-    echo    3. Run the test script: python test_app_startup.py
-    echo    4. Check INSTALLATION.md for troubleshooting
-    echo.
-    echo 📖 For help, see: QUICKSTART.md or INSTALLATION.md
-    echo.
-    pause
-    exit /b !errorlevel!
-)
+start python main.py
 
 echo.
-echo ✅ Application started successfully!
+echo ✅ Application is starting...
 echo.
-echo If the application window doesn't appear, check the console for error messages.
-echo To close this window, you can press any key after the application starts.
+echo If the application window doesn't appear, check for error messages above.
+echo The application runs in a separate window, so you can close this console.
 echo.
 pause
