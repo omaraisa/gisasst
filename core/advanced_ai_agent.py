@@ -17,9 +17,10 @@ class AdvancedGISAgent(QObject):
     analysis_failed = pyqtSignal(str)
     status_update = pyqtSignal(str)  # For reporting progress
     
-    def __init__(self, config):
+    def __init__(self, config, app_functions=None):
         super().__init__()
         self.config = config
+        self.app_functions = app_functions  # Central hub for all operations
         self.logger = get_logger(__name__)
         self.conversation_history = []
         
@@ -295,10 +296,20 @@ Generate ONLY the JSON plan, no other text:"""
             'subprocess': subprocess,
             'Path': Path,
             
-            # Data manager functions
+            # Data manager functions (legacy)
             'get_layer': lambda name: data_manager.get_layer(name),
             'get_layer_names': lambda: data_manager.get_layer_names(),
             'add_analysis_result': lambda gdf, name: data_manager.add_analysis_result(gdf, name),
+            
+            # App functions - centralized operations
+            'app_functions': self.app_functions,
+            'load_layer': lambda path, name=None: self.app_functions.load_layer(path, name) if self.app_functions else None,
+            'add_to_map': lambda gdf, name: self.app_functions.add_analysis_result(gdf, name) if self.app_functions else None,
+            'buffer_layer': lambda layer, dist, unit='meters': self.app_functions.buffer_layer(layer, dist, unit) if self.app_functions else None,
+            'intersect_layers': lambda l1, l2: self.app_functions.intersect_layers(l1, l2) if self.app_functions else None,
+            'select_by_attribute': lambda layer, col, val, op='equals': self.app_functions.select_by_attribute(layer, col, val, op) if self.app_functions else None,
+            'update_map': lambda: self.app_functions.update_map() if self.app_functions else None,
+            'zoom_to_layer': lambda layer: self.app_functions.zoom_to_layer(layer) if self.app_functions else None,
             
             # Results placeholder
             'result_gdf': None,
@@ -313,7 +324,19 @@ Generate ONLY the JSON plan, no other text:"""
             if execution_env.get('result_gdf') is not None:
                 gdf = execution_env['result_gdf']
                 layer_name = execution_env.get('result_layer_name', 'analysis_result')
-                final_name = data_manager.add_analysis_result(gdf, layer_name)
+                
+                # Use app_functions if available, otherwise fall back to data_manager
+                if self.app_functions:
+                    add_result = self.app_functions.add_analysis_result(gdf, layer_name)
+                    if add_result['success']:
+                        final_name = add_result['layer_name']
+                        # Update map after adding
+                        self.app_functions.update_map()
+                    else:
+                        final_name = data_manager.add_analysis_result(gdf, layer_name)
+                else:
+                    final_name = data_manager.add_analysis_result(gdf, layer_name)
+                    
                 return (gdf, final_name)
             elif execution_env.get('result') is not None:
                 return execution_env['result']
@@ -356,22 +379,71 @@ Generate ONLY the JSON plan, no other text:"""
             raise Exception(f"Command execution failed: {str(e)}")
     
     def _spatial_analysis(self, parameters, data_manager):
-        """Perform spatial analysis operations"""
+        """Perform spatial analysis operations using app_functions"""
         operation = parameters.get('operation', '')
         layers = parameters.get('layers', [])
         params = parameters.get('parameters', {})
         
-        # This could be expanded with specific spatial operations
-        # For now, delegate to Python code execution
-        code = f"""
+        self.logger.info(f"Performing spatial analysis: {operation}")
+        
+        if not self.app_functions:
+            return "App functions not available for spatial analysis"
+        
+        try:
+            # Handle different spatial operations
+            if operation == 'buffer':
+                layer_name = params.get('layer_name')
+                distance = params.get('distance', 100)
+                unit = params.get('unit', 'meters')
+                
+                result = self.app_functions.buffer_layer(layer_name, distance, unit)
+                if result['success']:
+                    return f"Buffer analysis completed: {result['message']}"
+                else:
+                    return f"Buffer analysis failed: {result['message']}"
+                    
+            elif operation == 'intersect':
+                layer1 = params.get('layer1')
+                layer2 = params.get('layer2')
+                
+                result = self.app_functions.intersect_layers(layer1, layer2)
+                if result['success']:
+                    return f"Intersection analysis completed: {result['message']}"
+                else:
+                    return f"Intersection analysis failed: {result['message']}"
+                    
+            elif operation == 'select_by_attribute':
+                layer_name = params.get('layer_name')
+                column = params.get('column')
+                value = params.get('value')
+                operator = params.get('operator', 'equals')
+                
+                result = self.app_functions.select_by_attribute(layer_name, column, value, operator)
+                if result['success']:
+                    return f"Attribute selection completed: {result['message']}"
+                else:
+                    return f"Attribute selection failed: {result['message']}"
+                    
+            else:
+                # Fall back to Python code execution for custom operations
+                code = f"""
 # Spatial analysis: {operation}
-layers = {layers}
-params = {params}
+# Available layers: {layers}
+# Parameters: {params}
 
-# Add your spatial analysis logic here
-result = "Spatial analysis completed for operation: {operation}"
+# Get available layers
+layer_names = get_layer_names()
+print(f"Available layers: {{layer_names}}")
+
+# Add your custom spatial analysis logic here
+result = f"Custom spatial analysis '{operation}' completed"
 """
-        return self._execute_python_code(code, data_manager)
+                return self._execute_python_code(code, data_manager)
+                
+        except Exception as e:
+            error_msg = f"Spatial analysis error: {str(e)}"
+            self.logger.error(error_msg)
+            return error_msg
     
     def _data_manipulation(self, parameters, data_manager):
         """Perform data manipulation"""

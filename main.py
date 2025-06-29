@@ -20,6 +20,7 @@ from core.data_manager import DataManager
 from core.ai_agent import AIAgent
 from core.advanced_ai_agent import AdvancedGISAgent
 from core.map_manager import MapManager
+from core.app_functions import AppFunctions
 from core.logger import setup_logging, get_logger, log_system_info, cleanup_old_logs
 from ui.file_browser import FileBrowser
 from ui.chat_panel import ChatPanel
@@ -46,8 +47,17 @@ class GISCopilotApp(QMainWindow):
             
             # Initialize core components
             self.data_manager = DataManager()
-            self.ai_agent = AdvancedGISAgent(self.config)  # Using Advanced Agent
             self.map_manager = MapManager()
+            
+            # Initialize app functions - central hub for all operations  
+            self.app_functions = AppFunctions(
+                data_manager=self.data_manager,
+                map_manager=self.map_manager,
+                main_window=self
+            )
+            
+            # Initialize AI agent with app functions
+            self.ai_agent = AdvancedGISAgent(self.config, self.app_functions)
             
             self.init_ui()
             self.setup_connections()
