@@ -97,7 +97,7 @@ class GISCopilotApp(QMainWindow):
         """Get default configuration"""
         return {
             "ai": {
-                "model": "gemini-2.5-flash-latest",
+                "model": "gemini-1.5-flash-latest",
                 "api_key": os.getenv("GEMINI_API_KEY", "")
             },
             "map": {

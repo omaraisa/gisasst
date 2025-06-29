@@ -94,7 +94,7 @@ class FileBrowser(QWidget):
             
             # Add files
             spatial_extensions = {'.shp', '.geojson', '.json', '.csv', '.kml', '.gpx', '.gdb'}
-            shapefile_companion_extensions = {'.dbf', '.shx', '.prj', '.sbn', '.sbx', '.fbn', '.fbx', '.ain', '.aih', '.ixs', '.mxs', '.atx', '.cpg', '.qix'}
+            shapefile_companion_extensions = {'.dbf', '.shx', '.prj', '.sbn', '.sbx', '.fbn', '.fbx', '.ain', '.aih', '.ixs', '.mxs', '.atx', '.cpg', '.qix', '.xml'}
             
             for item in sorted(self.current_path.iterdir()):
                 if item.is_file():

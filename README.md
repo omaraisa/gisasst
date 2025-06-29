@@ -144,7 +144,7 @@ THEME=dark
 ### Config File (config/config.yaml)
 ```yaml
 ai:
-  model: "gemini-2.5-flash-latest"
+  model: "gemini-1.5-flash-latest"
   
 map:
   default_center: [24.7135, 46.6753]  # Riyadh

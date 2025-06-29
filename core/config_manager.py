@@ -24,7 +24,7 @@ class ConfigManager:
             # Default configuration if file doesn't exist
             self._config = {
                 "ai": {
-                    "model": "gemini-2.5-flash-latest",
+                    "model": "gemini-1.5-flash-latest",
                     "api_key": ""
                 },
                 "map": {
