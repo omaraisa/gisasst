@@ -38,7 +38,7 @@ This guide will help you install and set up GIS Copilot Desktop on your computer
    - ✅ Run system tests
 
 3. **Configure your API key**
-   - Get your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Get your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
    - Edit the `.env` file and replace `your_api_key_here` with your actual key
 
 4. **Start the application**
@@ -181,7 +181,7 @@ If the automated setup doesn't work for you:
    GEMINI_API_KEY=AIzaSy...  # Should start with AIzaSy
    ```
 
-2. **Check API key validity** at [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. **Check API key validity** at [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 3. **Verify internet connection** for AI features
 

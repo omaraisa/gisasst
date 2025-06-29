@@ -124,7 +124,7 @@ if not exist ".env" (
     echo ✅ .env file created successfully!
     echo.
     echo ⚠️  Important: Please edit .env file and add your Gemini API key!
-    echo Get your API key from: https://makersuite.google.com/app/apikey
+    echo Get your API key from: https://aistudio.google.com/app/apikey
     echo.
     set /p response="Do you want to open .env file now? (y/n): "
     if /i "!response!"=="y" notepad .env

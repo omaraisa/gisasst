@@ -26,7 +26,7 @@ A desktop GIS application with AI-powered spatial analysis capabilities. This is
 
 1. **Download the project** (clone or download ZIP)
 2. **Run the setup wizard**: Double-click `SETUP.bat` (Windows) or follow [INSTALLATION.md](INSTALLATION.md)
-3. **Configure your API key**: Edit `.env` file with your [Gemini API key](https://makersuite.google.com/app/apikey)
+3. **Configure your API key**: Edit `.env` file with your [Gemini API key](https://aistudio.google.com/app/apikey)
 4. **Start the application**: Double-click `start.bat` or run `python main.py`
 
 > **Having installation issues?** Check our comprehensive [Installation Guide](INSTALLATION.md) which handles common SSL errors and dependency issues.

@@ -5,7 +5,7 @@ Welcome to GIS Copilot Desktop! This guide will get you up and running in 5 minu
 ## 🎯 What You'll Need
 
 - Python 3.8 or higher ([Download here](https://www.python.org/downloads/))
-- A Gemini API key ([Get one free here](https://makersuite.google.com/app/apikey))
+- A Gemini API key ([Get one free here](https://aistudio.google.com/app/apikey))
 
 ## ⚡ Super Quick Setup
 
@@ -36,7 +36,7 @@ python main.py
 
 ## 🔑 Configure Your API Key
 
-1. Get your **free** Gemini API key: https://makersuite.google.com/app/apikey
+1. Get your **free** Gemini API key: https://aistudio.google.com/app/apikey
 2. Open the `.env` file in any text editor
 3. Replace `your_api_key_here` with your actual API key:
    ```
