@@ -17,8 +17,7 @@ import yaml
 from dotenv import load_dotenv
 
 from core.data_manager import DataManager
-from core.ai_agent import AIAgent
-from core.advanced_ai_agent import AdvancedGISAgent
+from core.autonomous_gis_agent import AutonomousGISAgent
 from core.map_manager import MapManager
 from core.app_functions import AppFunctions
 from core.logger import setup_logging, get_logger, log_system_info, cleanup_old_logs
@@ -57,7 +56,11 @@ class GISCopilotApp(QMainWindow):
             )
             
             # Initialize AI agent with app functions
-            self.ai_agent = AdvancedGISAgent(self.config, self.app_functions)
+            self.ai_agent = AutonomousGISAgent(
+                config=self.config, 
+                app_functions=self.app_functions,
+                data_manager=self.data_manager
+            )
             
             self.init_ui()
             self.setup_connections()

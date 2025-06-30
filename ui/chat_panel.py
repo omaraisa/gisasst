@@ -9,21 +9,17 @@ class ChatWorker(QThread):
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, ai_agent, question, data_manager):
+    def __init__(self, ai_agent, user_input):
         super().__init__()
         self.ai_agent = ai_agent
-        self.question = question
-        self.data_manager = data_manager
+        self.user_input = user_input
         
     def run(self):
         try:
-            # Use the new process_request method for advanced agent
-            if hasattr(self.ai_agent, 'process_request'):
-                response = self.ai_agent.process_request(self.question, self.data_manager)
-            else:
-                # Fallback to old method for compatibility
-                response = self.ai_agent.process_question(self.question, self.data_manager)
+            # Process input using autonomous agent
+            response = self.ai_agent.process_input(self.user_input)
             self.response_ready.emit(response)
+            
         except Exception as e:
             self.error_occurred.emit(str(e))
 
@@ -116,10 +112,27 @@ class ChatPanel(QWidget):
         
     def setup_connections(self):
         """Setup signal connections"""
-        self.ai_agent.analysis_completed.connect(self.on_analysis_completed)
-        self.ai_agent.analysis_failed.connect(self.on_analysis_failed)
+        # Connect autonomous agent signals
+        if hasattr(self.ai_agent, 'thinking_started'):
+            self.ai_agent.thinking_started.connect(self.on_thinking_started)
+        if hasattr(self.ai_agent, 'plan_created'):
+            self.ai_agent.plan_created.connect(self.on_plan_created)
+        if hasattr(self.ai_agent, 'step_started'):
+            self.ai_agent.step_started.connect(self.on_step_started)
+        if hasattr(self.ai_agent, 'step_completed'):
+            self.ai_agent.step_completed.connect(self.on_step_completed)
+        if hasattr(self.ai_agent, 'step_failed'):
+            self.ai_agent.step_failed.connect(self.on_step_failed)
+        if hasattr(self.ai_agent, 'plan_completed'):
+            self.ai_agent.plan_completed.connect(self.on_plan_completed)
+        if hasattr(self.ai_agent, 'conversation_response'):
+            self.ai_agent.conversation_response.connect(self.on_conversation_response)
         
-        # Connect status updates for advanced agent
+        # Legacy connections for backward compatibility
+        if hasattr(self.ai_agent, 'analysis_completed'):
+            self.ai_agent.analysis_completed.connect(self.on_analysis_completed)
+        if hasattr(self.ai_agent, 'analysis_failed'):
+            self.ai_agent.analysis_failed.connect(self.on_analysis_failed)
         if hasattr(self.ai_agent, 'status_update'):
             self.ai_agent.status_update.connect(self.on_status_update)
         
@@ -150,51 +163,37 @@ class ChatPanel(QWidget):
         
     def send_message(self):
         """Send message to AI"""
-        question = self.chat_input.text().strip()
-        if not question:
-            return
-            
-        # Check if any layers are available
-        if not self.data_manager.get_layer_names():
-            self.add_message("AI", "No layers available. Please load some spatial data first.")
+        user_input = self.chat_input.text().strip()
+        if not user_input:
             return
             
         # Add user message
-        self.add_message("You", question)
+        self.add_message("You", user_input)
         self.chat_input.clear()
         
         # Disable input while processing
         self.set_input_enabled(False)
-        self.add_message("AI", "🔄 Processing your request...")
         
         # Start worker thread
-        self.chat_worker = ChatWorker(self.ai_agent, question, self.data_manager)
+        self.chat_worker = ChatWorker(self.ai_agent, user_input)
         self.chat_worker.response_ready.connect(self.on_response_ready)
         self.chat_worker.error_occurred.connect(self.on_error_occurred)
         self.chat_worker.start()
         
     @pyqtSlot(str)
     def on_response_ready(self, response):
-        """Handle AI response"""
-        # Remove processing message
-        self.remove_last_message()
-        
-        # Add AI response
-        self.add_message("AI", response)
+        """Handle AI response - only for non-autonomous responses"""
+        # For autonomous agent, signals are handled separately
+        # This is mainly for fallback or direct responses
+        if response:
+            self.add_message("AI", response)
         
         # Re-enable input
         self.set_input_enabled(True)
         
-        # Request map update
-        self.map_update_requested.emit()
-        
     @pyqtSlot(str)
     def on_error_occurred(self, error):
         """Handle error"""
-        # Remove processing message
-        self.remove_last_message()
-        
-        # Add error message
         self.add_message("AI", f"❌ Error: {error}")
         
         # Re-enable input
@@ -245,3 +244,50 @@ class ChatPanel(QWidget):
         """Clear chat history"""
         self.chat_display.clear()
         self.add_message("AI", "Chat cleared. How can I help you with spatial analysis?", "system")
+        
+    @pyqtSlot(str)
+    def on_thinking_started(self, message):
+        """Handle thinking started signal"""
+        self.add_message("AI", f"🧠 {message}", "system")
+    
+    @pyqtSlot(str, str)
+    def on_step_started(self, step_id, description):
+        """Handle step started signal"""
+        self.add_message("AI", f"🔄 {description}", "system")
+    
+    @pyqtSlot(str, object)
+    def on_step_completed(self, step_id, result):
+        """Handle step completed signal"""
+        if result and len(str(result)) > 100:
+            # Truncate long results
+            result_str = str(result)[:100] + "..."
+        else:
+            result_str = str(result)
+        self.add_message("AI", f"✅ Step completed: {result_str}", "system")
+    
+    @pyqtSlot(object)
+    def on_plan_created(self, plan):
+        """Handle plan created signal"""
+        self.add_message("AI", f"📋 Created execution plan: {plan.goal}", "system")
+        self.add_message("AI", f"📝 Approach: {plan.approach}", "system")
+        self.add_message("AI", f"🔢 Steps to execute: {len(plan.steps)}", "system")
+    
+    @pyqtSlot(str, str)
+    def on_step_failed(self, step_id, error):
+        """Handle step failed signal"""
+        self.add_message("AI", f"❌ {step_id}: {error}", "system")
+    
+    @pyqtSlot(str)
+    def on_plan_completed(self, final_response):
+        """Handle plan completion - this is the main response"""
+        self.add_message("AI", final_response)
+        self.map_update_requested.emit()
+        # Re-enable input after task completion
+        self.set_input_enabled(True)
+    
+    @pyqtSlot(str)
+    def on_conversation_response(self, response):
+        """Handle conversational response"""
+        self.add_message("AI", response)
+        # Re-enable input after conversation
+        self.set_input_enabled(True)
